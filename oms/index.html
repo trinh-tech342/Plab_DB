@@ -3,304 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Nhập liệu OMS Pro</title>
+    <title>OMS Pro - Hệ Thống Quản Lý Đơn Hàng</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
     
     <style>
         :root {
-            --primary-color: #2563eb;
-            --secondary-color: #64748b;
-            --success-color: #16a34a;
-            --info-color: #0ea5e9;
-            --danger-color: #dc2626;
-            --bg-color: #f8fafc;
-            --border-color: #e2e8f0;
-            --text-main: #1e293b;
+            --primary: #2563eb; --success: #16a34a; --info: #0ea5e9; --danger: #dc2626;
+            --bg: #f8fafc; --border: #e2e8f0; --text: #1e293b;
         }
 
-        body { background-color: var(--bg-color); font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; color: var(--text-main); }
-
-        .oms-form-container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-
-        .oms-header { border-bottom: 2px solid var(--bg-color); margin-bottom: 25px; padding-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .oms-header h2 { margin: 0; color: var(--primary-color); display: flex; align-items: center; gap: 10px; }
-
-        .form-section { margin-bottom: 30px; }
-        .form-section h3 { font-size: 1.1rem; margin-bottom: 15px; color: var(--secondary-color); border-left: 4px solid var(--primary-color); padding-left: 10px; }
-
-        .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-        .input-group { display: flex; flex-direction: column; }
-        .input-group.full-width { grid-column: span 2; }
-        .input-group label { font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; }
-
-        input, select, textarea {
-            padding: 10px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 14px;
-            transition: 0.2s;
-        }
-        input:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-        .readonly { background-color: #f1f5f9; cursor: not-allowed; }
-
-        /* Table & Autocomplete */
-        .search-cell { position: relative; }
-        .product-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-        .product-table th { text-align: left; padding: 12px; background: #f8fafc; border-bottom: 2px solid var(--border-color); }
-        .product-table td { padding: 10px; border-bottom: 1px solid var(--border-color); }
+        body { background: var(--bg); font-family: 'Segoe UI', sans-serif; padding: 20px; color: var(--text); }
+        .oms-container { max-width: 1100px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         
-        .autocomplete-suggestions {
-            position: absolute; top: 100%; left: 0; right: 0; background: white;
-            border: 1px solid #ddd; border-radius: 4px; max-height: 200px;
-            overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: none;
-        }
-        .suggestion-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
-        .suggestion-item:hover { background-color: #f1f5f9; }
-        .suggestion-item strong { display: block; font-size: 0.8em; color: var(--secondary-color); }
+        .header { border-bottom: 2px solid var(--bg); margin-bottom: 25px; padding-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .header h2 { margin: 0; color: var(--primary); display: flex; align-items: center; gap: 10px; }
 
-        /* Summary & Buttons */
-        .summary-box { background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); }
-        .summary-item { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
-        .summary-item.total { border-top: 2px solid var(--border-color); padding-top: 10px; font-weight: bold; color: var(--danger-color); font-size: 1.2rem; }
+        .section { margin-bottom: 25px; }
+        .section h3 { font-size: 1rem; margin-bottom: 15px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; border-left: 4px solid var(--primary); padding-left: 10px; }
 
-        .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .col-full { grid-column: span 2; }
         
-        button { border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
-        .btn-add-item { background: white; border: 1px dashed var(--primary-color); color: var(--primary-color); margin-bottom: 10px; }
-        .btn-add-item:hover { background: #eff6ff; }
-        .btn-primary { background: var(--primary-color); color: white; }
-        .btn-print { background: var(--info-color); color: white; }
-        .btn-excel { background: var(--success-color); color: white; }
-        .btn-secondary { background: #e2e8f0; color: var(--secondary-color); }
-        .btn-remove { background: #fee2e2; color: var(--danger-color); padding: 5px 10px; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-weight: 600; font-size: 0.85rem; }
+        input, select, textarea { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+        input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .readonly { background: #f1f5f9; cursor: not-allowed; }
 
-        /* Media Query for Printing */
+        /* Table Styling */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #f8fafc; text-align: left; padding: 12px; border-bottom: 2px solid var(--border); font-size: 0.85rem; }
+        td { padding: 8px; border-bottom: 1px solid var(--border); position: relative; }
+        
+        .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 180px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; }
+        .sug-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+        .sug-item:hover { background: #f1f5f9; }
+        .sug-item b { color: var(--primary); display: block; font-size: 11px; }
+
+        .summary { background: #f8fafc; padding: 20px; border-radius: 8px; }
+        .sum-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
+        .sum-total { border-top: 2px solid var(--border); pt: 10px; font-weight: bold; color: var(--danger); font-size: 1.3rem; margin-top: 10px; padding-top: 10px; }
+
+        .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+        button { border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-add { background: white; border: 1px dashed var(--primary); color: var(--primary); width: 100%; justify-content: center; margin-top: 10px; }
+        .btn-save { background: var(--primary); color: white; }
+        .btn-excel { background: var(--success); color: white; }
+        .btn-print { background: var(--info); color: white; }
+        .btn-remove { background: #fee2e2; color: var(--danger); padding: 5px 10px; }
+
         @media print {
-            body { background: white; padding: 0; }
-            .form-actions, .btn-add-item, .btn-remove, .autocomplete-suggestions { display: none !important; }
-            .oms-form-container { box-shadow: none; width: 100%; border: none; }
-            input, select, textarea { border: none !important; appearance: none; }
+            .actions, .btn-add, .btn-remove, .suggestions { display: none !important; }
+            body { padding: 0; background: white; }
+            .oms-container { box-shadow: none; width: 100%; }
         }
     </style>
 </head>
 <body>
 
-<div class="oms-form-container">
-    <div class="oms-header">
-        <h2><i class="fas fa-file-invoice"></i> Form Nhập Đơn Hàng</h2>
-        <span id="order-date"></span>
+<div class="oms-container">
+    <div class="header">
+        <h2><i class="fas fa-boxes"></i> OMS DashBoard</h2>
+        <div id="live-clock" style="font-weight: 600; color: #64748b;"></div>
     </div>
 
-    <form id="oms-input-form">
-        <div class="form-section">
-            <h3>Thông tin khách hàng</h3>
-            <div class="form-grid">
-                <div class="input-group">
-                    <label>Số điện thoại</label>
-                    <input type="text" id="cust-phone" placeholder="090x xxx xxx" required>
-                </div>
-                <div class="input-group">
-                    <label>Tên khách hàng</label>
-                    <input type="text" id="cust-name" placeholder="Nguyễn Văn A">
-                </div>
-                <div class="input-group full-width">
-                    <label>Địa chỉ giao hàng</label>
-                    <input type="text" id="cust-address" placeholder="Số nhà, tên đường, phường/xã...">
-                </div>
+    <form id="main-form">
+        <div class="section">
+            <h3>1. Khách hàng</h3>
+            <div class="grid">
+                <div class="input-group"><label>Điện thoại</label><input type="text" id="c-phone" required placeholder="090..."></div>
+                <div class="input-group"><label>Họ tên</label><input type="text" id="c-name" placeholder="Tên khách hàng"></div>
+                <div class="input-group col-full"><label>Địa chỉ</label><input type="text" id="c-addr" placeholder="Địa chỉ giao hàng"></div>
             </div>
         </div>
 
-        <div class="form-section">
-            <h3>Chi tiết sản phẩm</h3>
-            <table class="product-table">
+        <div class="section">
+            <h3>2. Đơn hàng</h3>
+            <table>
                 <thead>
                     <tr>
                         <th>Sản phẩm</th>
-                        <th width="150">SKU</th>
-                        <th width="100">Số lượng</th>
-                        <th width="150">Đơn giá</th>
+                        <th width="120">SKU</th>
+                        <th width="80">SL</th>
+                        <th width="130">Đơn giá</th>
                         <th width="40"></th>
                     </tr>
                 </thead>
-                <tbody id="product-body">
+                <tbody id="product-list">
                     <tr>
-                        <td class="search-cell">
-                            <input type="text" class="product-search" placeholder="Gõ tìm sản phẩm...">
-                            <div class="autocomplete-suggestions"></div>
+                        <td>
+                            <input type="text" class="p-search" placeholder="Tìm sản phẩm..." style="width: 90%;">
+                            <div class="suggestions"></div>
                         </td>
-                        <td><input type="text" readonly class="readonly sku-field" value=""></td>
-                        <td><input type="number" class="qty-input" value="1" min="1"></td>
-                        <td><input type="text" class="price-input" value="0"></td>
-                        <td><button type="button" class="btn-remove"><i class="fas fa-trash"></i></button></td>
+                        <td><input type="text" readonly class="readonly p-sku" style="width: 100px;"></td>
+                        <td><input type="number" class="p-qty" value="1" min="1" style="width: 60px;"></td>
+                        <td><input type="number" class="p-price" value="0" style="width: 110px;"></td>
+                        <td><button type="button" class="btn-remove">&times;</button></td>
                     </tr>
                 </tbody>
             </table>
-            <button type="button" class="btn-add-item" id="add-row-btn"><i class="fas fa-plus"></i> Thêm sản phẩm</button>
+            <button type="button" class="btn-add" id="add-row"><i class="fas fa-plus"></i> Thêm dòng</button>
         </div>
 
-        <div class="form-section">
-            <div class="form-grid">
-                <div class="input-group">
-                    <label>Ghi chú</label>
-                    <textarea id="order-note" rows="4" placeholder="Ghi chú đơn hàng hoặc yêu cầu giao hàng..."></textarea>
+        <div class="section grid">
+            <div class="input-group">
+                <label>Ghi chú nội bộ</label>
+                <textarea id="order-note" rows="5" placeholder="Ghi chú về đóng gói, vận chuyển..."></textarea>
+            </div>
+            <div class="summary">
+                <div class="sum-row"><span>Tạm tính:</span><span id="subtotal">0đ</span></div>
+                <div class="sum-row">
+                    <span>Phí Ship:</span>
+                    <input type="number" id="ship-fee" value="0" style="width: 80px; text-align: right;">
                 </div>
-                <div class="summary-box">
-                    <div class="summary-item">
-                        <span>Tạm tính:</span>
-                        <span id="subtotal-display">0đ</span>
-                    </div>
-                    <div class="summary-item">
-                        <span>Phí giao hàng:</span>
-                        <input type="number" id="shipping-fee" class="shipping-input" value="0" style="width: 100px; text-align: right;">
-                    </div>
-                    <div class="summary-item total">
-                        <span>TỔNG CỘNG:</span>
-                        <span id="total-display">0đ</span>
-                    </div>
-                </div>
+                <div class="sum-row sum-total"><span>TỔNG CỘNG:</span><span id="final-total">0đ</span></div>
             </div>
         </div>
 
-        <div class="form-actions">
-            <button type="button" class="btn-secondary" onclick="location.reload()"><i class="fas fa-redo"></i> Làm mới</button>
-            <button type="button" class="btn-excel" id="export-excel-btn"><i class="fas fa-file-excel"></i> Xuất Excel</button>
-            <button type="button" class="btn-print" id="print-btn"><i class="fas fa-print"></i> In đơn hàng</button>
-            <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Lưu & Đẩy đơn</button>
+        <div class="actions">
+            <button type="button" class="btn-print" id="do-print"><i class="fas fa-print"></i> In đơn</button>
+            <button type="button" class="btn-excel" id="do-excel"><i class="fas fa-file-excel"></i> Xuất Excel</button>
+            <button type="submit" class="btn-save" id="submit-btn"><i class="fas fa-cloud-upload-alt"></i> Lưu đơn (Sheets)</button>
         </div>
     </form>
 </div>
 
 <script>
-// 1. Dữ liệu sản phẩm giả lập
-const productsDatabase = [
-    { name: "iPhone 15 Pro Max", sku: "IP15PM-256", price: 28000000 },
-    { name: "Samsung Galaxy S24 Ultra", sku: "SS-S24U", price: 26500000 },
-    { name: "Tai nghe Airpods Pro", sku: "AP-PRO-2", price: 5500000 },
-    { name: "Ốp lưng Magsafe", sku: "CASE-MS", price: 1200000 },
-    { name: "Sạc nhanh 20W", sku: "CHARGER-20W", price: 490000 }
+// CẤU HÌNH DỮ LIỆU & URL
+const DB_PRODUCTS = [
+    { name: "iPhone 15 Pro Max", sku: "IP15PM", price: 28500000 },
+    { name: "Samsung Galaxy S24 Ultra", sku: "S24U", price: 26000000 },
+    { name: "Macbook Pro M3", sku: "MBP-M3", price: 45000000 },
+    { name: "Ốp lưng Silicon", sku: "CASE-01", price: 150000 }
 ];
 
-document.addEventListener('DOMContentLoaded', function() {
-    const productBody = document.getElementById('product-body');
-    const orderDate = document.getElementById('order-date');
-    orderDate.innerText = "Ngày: " + new Date().toLocaleDateString('vi-VN');
+// DÁN URL GOOGLE SCRIPT CỦA BẠN VÀO ĐÂY
+const GOOGLE_URL = 'https://script.google.com/macros/s/XXX/exec'; 
 
-    // --- HÀM TÍNH TOÁN ---
-    function calculateTotal() {
-        let subtotal = 0;
-        document.querySelectorAll('#product-body tr').forEach(row => {
-            const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
-            const price = parseFloat(row.querySelector('.price-input').value) || 0;
-            subtotal += qty * price;
+document.addEventListener('DOMContentLoaded', () => {
+    const pList = document.getElementById('product-list');
+    
+    // Đồng hồ
+    setInterval(() => { document.getElementById('live-clock').innerText = new Date().toLocaleString('vi-VN'); }, 1000);
+
+    // Hàm tính tiền
+    function calc() {
+        let sub = 0;
+        document.querySelectorAll('#product-list tr').forEach(row => {
+            sub += (row.querySelector('.p-qty').value || 0) * (row.querySelector('.p-price').value || 0);
         });
-
-        const shipping = parseFloat(document.getElementById('shipping-fee').value) || 0;
-        const total = subtotal + shipping;
-
-        document.getElementById('subtotal-display').innerText = subtotal.toLocaleString('vi-VN') + 'đ';
-        document.getElementById('total-display').innerText = total.toLocaleString('vi-VN') + 'đ';
+        const ship = parseFloat(document.getElementById('ship-fee').value || 0);
+        document.getElementById('subtotal').innerText = sub.toLocaleString() + 'đ';
+        document.getElementById('final-total').innerText = (sub + ship).toLocaleString() + 'đ';
     }
 
-    // --- THÊM DÒNG MỚI ---
-    document.getElementById('add-row-btn').addEventListener('click', () => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td class="search-cell">
-                <input type="text" class="product-search" placeholder="Gõ tìm sản phẩm...">
-                <div class="autocomplete-suggestions"></div>
-            </td>
-            <td><input type="text" readonly class="readonly sku-field" value=""></td>
-            <td><input type="number" class="qty-input" value="1" min="1"></td>
-            <td><input type="text" class="price-input" value="0"></td>
-            <td><button type="button" class="btn-remove"><i class="fas fa-trash"></i></button></td>
-        `;
-        productBody.appendChild(tr);
-    });
+    // Thêm dòng
+    document.getElementById('add-row').onclick = () => {
+        const row = pList.rows[0].cloneNode(true);
+        row.querySelectorAll('input').forEach(i => i.value = i.classList.contains('p-qty') ? 1 : (i.classList.contains('p-price') ? 0 : ''));
+        pList.appendChild(row);
+    };
 
-    // --- AUTOCOMPLETE & XỬ LÝ BẢNG ---
-    productBody.addEventListener('input', function(e) {
-        if (e.target.classList.contains('product-search')) {
-            const keyword = e.target.value.toLowerCase();
-            const suggestionBox = e.target.nextElementSibling;
-            
-            if (keyword.length < 1) { suggestionBox.style.display = 'none'; return; }
-
-            const matches = productsDatabase.filter(p => p.name.toLowerCase().includes(keyword) || p.sku.toLowerCase().includes(keyword));
-            
-            if (matches.length > 0) {
-                suggestionBox.innerHTML = matches.map(p => `
-                    <div class="suggestion-item" data-name="${p.name}" data-sku="${p.sku}" data-price="${p.price}">
-                        ${p.name} <strong>Mã: ${p.sku}</strong>
-                    </div>
-                `).join('');
-                suggestionBox.style.display = 'block';
-            } else {
-                suggestionBox.style.display = 'none';
-            }
+    // Xử lý sự kiện bảng (Input & Xóa & Search)
+    pList.oninput = (e) => {
+        if (e.target.classList.contains('p-search')) {
+            const val = e.target.value.toLowerCase();
+            const box = e.target.nextElementSibling;
+            if (val.length < 1) { box.style.display = 'none'; return; }
+            const match = DB_PRODUCTS.filter(p => p.name.toLowerCase().includes(val) || p.sku.toLowerCase().includes(val));
+            box.innerHTML = match.map(p => `<div class="sug-item" data-p='${JSON.stringify(p)}'>${p.name}<b>Mã: ${p.sku} - Giá: ${p.price.toLocaleString()}</b></div>`).join('');
+            box.style.display = 'block';
         }
-        calculateTotal();
-    });
+        calc();
+    };
 
-    productBody.addEventListener('click', function(e) {
-        // Chọn sản phẩm từ gợi ý
-        const item = e.target.closest('.suggestion-item');
-        if (item) {
-            const row = item.closest('tr');
-            row.querySelector('.product-search').value = item.dataset.name;
-            row.querySelector('.sku-field').value = item.dataset.sku;
-            row.querySelector('.price-input').value = item.dataset.price;
-            item.parentElement.style.display = 'none';
-            calculateTotal();
+    pList.onclick = (e) => {
+        if (e.target.classList.contains('btn-remove')) { if(pList.rows.length > 1) { e.target.closest('tr').remove(); calc(); } }
+        if (e.target.classList.contains('sug-item')) {
+            const data = JSON.parse(e.target.dataset.p);
+            const row = e.target.closest('tr');
+            row.querySelector('.p-search').value = data.name;
+            row.querySelector('.p-sku').value = data.sku;
+            row.querySelector('.p-price').value = data.price;
+            e.target.parentElement.style.display = 'none';
+            calc();
         }
-        // Xóa dòng
-        if (e.target.closest('.btn-remove')) {
-            if (document.querySelectorAll('#product-body tr').length > 1) {
-                e.target.closest('tr').remove();
-                calculateTotal();
-            }
-        }
-    });
+    };
 
-    document.getElementById('shipping-fee').addEventListener('input', calculateTotal);
+    document.getElementById('ship-fee').oninput = calc;
 
-    // --- XUẤT EXCEL ---
-    document.getElementById('export-excel-btn').addEventListener('click', () => {
-        const data = [];
-        document.querySelectorAll('#product-body tr').forEach(row => {
-            if(row.querySelector('.product-search').value) {
-                data.push({
-                    "Sản phẩm": row.querySelector('.product-search').value,
-                    "SKU": row.querySelector('.sku-field').value,
-                    "Số lượng": row.querySelector('.qty-input').value,
-                    "Đơn giá": row.querySelector('.price-input').value,
-                });
-            }
+    // In đơn
+    document.getElementById('do-print').onclick = () => window.print();
+
+    // Xuất Excel
+    document.getElementById('do-excel').onclick = () => {
+        let rows = [];
+        document.querySelectorAll('#product-list tr').forEach(r => {
+            rows.push({ "Sản phẩm": r.querySelector('.p-search').value, "SKU": r.querySelector('.p-sku').value, "Số lượng": r.querySelector('.p-qty').value, "Giá": r.querySelector('.p-price').value });
         });
-        const ws = XLSX.utils.json_to_sheet(data);
+        const ws = XLSX.utils.json_to_sheet(rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "DonHang");
-        XLSX.writeFile(wb, "DonHang_OMS.xlsx");
-    });
+        XLSX.writeFile(wb, "Xuat_Don_Hang.xlsx");
+    };
 
-    // --- IN ĐƠN ---
-    document.getElementById('print-btn').addEventListener('click', () => window.print());
+    // Lưu vào Google Sheets
+    document.getElementById('main-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true; btn.innerHTML = "Đang gửi...";
 
-    // Click ra ngoài ẩn gợi ý
-    document.addEventListener('click', (e) => {
-        if (!e.target.classList.contains('product-search')) {
-            document.querySelectorAll('.autocomplete-suggestions').forEach(b => b.style.display = 'none');
+        const payload = {
+            customer: { phone: document.getElementById('c-phone').value, name: document.getElementById('c-name').value, address: document.getElementById('c-addr').value },
+            products: Array.from(document.querySelectorAll('#product-list tr')).map(r => ({ name: r.querySelector('.p-search').value, sku: r.querySelector('.p-sku').value, qty: r.querySelector('.p-qty').value, price: r.querySelector('.p-price').value })),
+            note: document.getElementById('order-note').value,
+            total: document.getElementById('final-total').innerText
+        };
+
+        try {
+            await fetch(GOOGLE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+            alert("Lưu thành công!");
+            document.getElementById('main-form').reset(); calc();
+        } catch (err) {
+            alert("Lỗi kết nối!");
+        } finally {
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Lưu đơn (Sheets)';
         }
-    });
+    };
 });
 </script>
-
 </body>
 </html>

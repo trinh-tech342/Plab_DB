@@ -92,6 +92,34 @@ CREATE TABLE IF NOT EXISTS batch_records (
     bom_snapshot JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+--- Báo cáo hồ sơ lô
+CREATE OR REPLACE FUNCTION get_batch_report(p_batch_number text)
+RETURNS TABLE (
+    batch_no text,
+    product_name text,
+    customer text,
+    quantity integer,
+    qc_status text,
+    qc_staff text,
+    bom_data jsonb,
+    created_at timestamptz
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        br.batch_number,
+        i.name,
+        o.customer_name,
+        br.quantity_produced,
+        br.qc_status,
+        br.qc_staff,
+        br.bom_snapshot,
+        br.created_at
+    FROM batch_records br
+    JOIN items i ON br.product_id = i.id
+    JOIN orders o ON br.order_id = o.id
+    WHERE br.batch_number = p_batch_number;
+END; $$ LANGUAGE plpgsql;
 --- 2. Logic Tự động hóa (Triggers & Functions) ---
 -- Trigger 1: Tự tạo dòng kho khi thêm sản phẩm mới
 CREATE OR REPLACE FUNCTION handle_new_item_inventory() RETURNS TRIGGER AS $$
@@ -150,13 +178,42 @@ BEGIN
 END; $$ LANGUAGE plpgsql;
 
 -- Hoàn tất sản xuất (Trừ NL theo BOM, Cộng TP)
-CREATE OR REPLACE FUNCTION mes_complete_production(p_product_id uuid, p_produce_qty numeric) RETURNS void AS $$
-DECLARE row_bom RECORD;
+CREATE OR REPLACE FUNCTION mes_complete_production(p_product_id uuid, p_produce_qty numeric, p_order_id uuid DEFAULT NULL) 
+RETURNS text AS $$
+DECLARE 
+    row_bom RECORD;
+    v_batch_no text;
+    v_bom_json jsonb;
 BEGIN
+    -- 1. Tạo số lô tự động (Định dạng LOT-Ngày-SốThứTự)
+    v_batch_no := 'LOT-' || to_char(now(), 'YYYYMMDD') || '-' || LPAD(floor(random()*1000)::text, 3, '0');
+
+    -- 2. Chụp ảnh công thức (BOM Snapshot) tại thời điểm sản xuất
+    SELECT jsonb_agg(jsonb_build_object('name', i.name, 'qty', b.quantity_required * p_produce_qty, 'unit', b.unit))
+    INTO v_bom_json
+    FROM bom b
+    JOIN items i ON b.component_item_id = i.id
+    WHERE b.parent_item_id = p_product_id;
+
+    -- 3. Trừ kho nguyên liệu theo BOM
     FOR row_bom IN SELECT component_item_id, quantity_required FROM bom WHERE parent_item_id = p_product_id LOOP
-        UPDATE inventory SET quantity_on_hand = quantity_on_hand - (row_bom.quantity_required * p_produce_qty) WHERE item_id = row_bom.component_item_id;
+        IF (SELECT quantity_on_hand FROM inventory WHERE item_id = row_bom.component_item_id) < (row_bom.quantity_required * p_produce_qty) THEN
+            RAISE EXCEPTION 'Không đủ nguyên liệu để sản xuất lô %', v_batch_no;
+        END IF;
+        
+        UPDATE inventory 
+        SET quantity_on_hand = quantity_on_hand - (row_bom.quantity_required * p_produce_qty) 
+        WHERE item_id = row_bom.component_item_id;
     END LOOP;
+
+    -- 4. Cộng kho thành phẩm
     UPDATE inventory SET quantity_on_hand = quantity_on_hand + p_produce_qty WHERE item_id = p_product_id;
+
+    -- 5. Ghi vào bảng Hồ sơ lô (Batch Records)
+    INSERT INTO batch_records (batch_number, order_id, product_id, quantity_produced, bom_snapshot, qc_status)
+    VALUES (v_batch_no, p_order_id, p_product_id, p_produce_qty, v_bom_json, 'PENDING');
+
+    RETURN v_batch_no; -- Trả về số lô để JS có thể thông báo
 END; $$ LANGUAGE plpgsql;
 --- 4. Hệ thống báo cáo (Views) ---
 -- Báo cáo Tồn kho
@@ -191,3 +248,6 @@ CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = '
 
 -- Cho phép Upload ảnh (Public Insert)
 CREATE POLICY "Allow Upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'farming-evidences');
+
+
+SELECT batch_number, qc_status, bom_snapshot FROM batch_records;

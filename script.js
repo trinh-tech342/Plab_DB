@@ -119,16 +119,24 @@ window.finishProduction = async function (orderId) {
 
   // 2. Gọi hàm "Phù thủy" MES trong SQL để trừ nguyên liệu & cộng thành phẩm
   // Chúng ta dùng RPC để gọi hàm mes_complete_production đã viết ở SQL
-  const { error: mesError } = await _supabase.rpc('mes_complete_production', {
-    p_product_id: orderItems.item_id,
-    p_produce_qty: orderItems.quantity,
-  });
+  // Gọi hàm RPC mới
+  const { data: newBatchNo, error: mesError } = await _supabase.rpc(
+    'mes_complete_production',
+    {
+      p_product_id: orderItems.item_id,
+      p_produce_qty: orderItems.quantity,
+      p_order_id: orderId,
+    },
+  );
 
   if (mesError) {
     alert('🧙‍♂️ Lỗi sản xuất: ' + mesError.message);
     return;
   }
-
+  // Thông báo số lô cho người dùng
+  alert(
+    `✨ Sản xuất hoàn tất! \nSố lô tự động: ${newBatchNo} \nNguyên liệu đã trừ & Hồ sơ lô đã được tạo.`,
+  );
   // 3. Sau khi sản xuất xong, tiến hành xác nhận xuất kho cho khách
   const { error: shipError } = await _supabase.rpc('confirm_order_shipping', {
     p_order_id: orderId,
@@ -202,8 +210,8 @@ function openModal(type) {
 
   // Cập nhật phần WMS trong hàm openModal
   // Thêm vào trong script.js
-// Thay thế đoạn 'farming-modal' cũ của bạn bằng đoạn này
-if (type === 'farming-modal') {
+  // Thay thế đoạn 'farming-modal' cũ của bạn bằng đoạn này
+  if (type === 'farming-modal') {
     body.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h2>🌿 Nhật ký canh tác Organic</h2>
@@ -244,11 +252,11 @@ if (type === 'farming-modal') {
         <h3>Lịch sử canh tác gần đây</h3>
         <div id="farming-history" style="max-height: 250px; overflow-y: auto;"></div>
     `;
-    
+
     // Kích hoạt các hàm load dữ liệu
-    loadPlotsAndLogs(); 
+    loadPlotsAndLogs();
     loadFarmingResources();
-}
+  }
   if (type === 'wms-modal') {
     body.innerHTML = `
         <h2>🏠 Quản lý Kho Vận (WMS)</h2>
@@ -264,11 +272,20 @@ if (type === 'farming-modal') {
     fetchInventory(); // Gọi hàm lấy dữ liệu ngay khi mở modal
   } else if (type === 'mes-modal') {
     body.innerHTML = `
-            <h2>🧪 Quản lý Sản xuất (MES)</h2>
-            <button onclick="printBOM()" class="btn-magic">In Công thức (BOM)</button>
-            <button onclick="getProductionReport()" class="btn-magic" style="margin-top:10px">Báo cáo sản xuất</button>
-            <div id="mes-report-area" style="margin-top:15px"></div>
-        `;
+        <h2>🧪 Hồ Sơ Lô Sản Xuất (Batch Records)</h2>
+        <div class="order-input-group" style="display: flex; gap: 10px;">
+            <input type="text" id="search-batch-no" placeholder="Nhập số lô (Vd: BATCH-123)...">
+            <button onclick="viewBatchDetail()" class="btn-magic">🔍 Tra cứu</button>
+        </div>
+        
+        <div id="batch-report-display" style="margin-top: 20px; min-height: 200px; background: #fff; color: #333; padding: 20px; border-radius: 8px; display: none;">
+            </div>
+        
+        <div id="batch-actions" style="margin-top: 15px; display: none; gap: 10px;">
+            <button onclick="approveQC()" class="btn-finish" style="background: #d90429;">印 Đóng dấu QC PASS</button>
+            <button onclick="exportBatchPDF()" class="btn-magic">📄 Xuất file PDF</button>
+        </div>
+    `;
   }
 }
 async function fetchInventory() {
@@ -385,25 +402,27 @@ async function printBOM() {
 
 // 1. Tải Lô đất và Lịch sử nhật ký gần đây
 async function loadPlotsAndLogs() {
-    const plotSelect = document.getElementById('log-plot-id');
-    const historyDiv = document.getElementById('farming-history');
+  const plotSelect = document.getElementById('log-plot-id');
+  const historyDiv = document.getElementById('farming-history');
 
-    // Lấy danh sách lô đất từ Database
-    const { data: plots } = await _supabase.from('plots').select('*');
-    if (plots && plotSelect) {
-        plotSelect.innerHTML = plots.map(p => 
-            `<option value="${p.id}">${p.name} (${p.crop_type})</option>`
-        ).join('');
-    }
+  // Lấy danh sách lô đất từ Database
+  const { data: plots } = await _supabase.from('plots').select('*');
+  if (plots && plotSelect) {
+    plotSelect.innerHTML = plots
+      .map((p) => `<option value="${p.id}">${p.name} (${p.crop_type})</option>`)
+      .join('');
+  }
 
-    // Lấy 10 nhật ký từ View tổng hợp (Hiển thị đẹp hơn)
-    const { data: logs, error } = await _supabase
-        .from('v_organic_compliance_report')
-        .select('*')
-        .limit(10);
+  // Lấy 10 nhật ký từ View tổng hợp (Hiển thị đẹp hơn)
+  const { data: logs, error } = await _supabase
+    .from('v_organic_compliance_report')
+    .select('*')
+    .limit(10);
 
-    if (logs && historyDiv) {
-        historyDiv.innerHTML = logs.map(l => `
+  if (logs && historyDiv) {
+    historyDiv.innerHTML = logs
+      .map(
+        (l) => `
             <div class="order-item" style="border-left: 4px solid #40916c; margin-bottom: 8px; background: rgba(64, 145, 108, 0.05);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <small>📅 ${l.activity_date}</small>
@@ -414,128 +433,305 @@ async function loadPlotsAndLogs() {
                 <p style="margin: 5px 0;"><b>${l.plot_name}</b>: ${l.activity_type}</p>
                 <p style="font-size: 0.85rem; color: #ddd;">Vật tư: ${l.input_used || 'Không'} | Lượng: ${l.input_quantity || 0}</p>
             </div>
-        `).join('');
-    }
+        `,
+      )
+      .join('');
+  }
 }
 
 // 2. Tải danh sách vật tư Organic vào Dropdown
 async function loadFarmingResources() {
-    const resSelect = document.getElementById('log-item-id');
-    if (!resSelect) return;
+  const resSelect = document.getElementById('log-item-id');
+  if (!resSelect) return;
 
-    const { data: resources } = await _supabase
-        .from('items')
-        .select('id, name, organic_cert_no')
-        .eq('type', 'raw_material')
-        .eq('is_organic_approved', true);
+  const { data: resources } = await _supabase
+    .from('items')
+    .select('id, name, organic_cert_no')
+    .eq('type', 'raw_material')
+    .eq('is_organic_approved', true);
 
-    if (resources) {
-        resSelect.innerHTML = '<option value="">-- Không dùng vật tư --</option>' + 
-            resources.map(r => 
-                `<option value="${r.id}">${r.name} (${r.organic_cert_no || 'Chưa có CC'})</option>`
-            ).join('');
-    }
+  if (resources) {
+    resSelect.innerHTML =
+      '<option value="">-- Không dùng vật tư --</option>' +
+      resources
+        .map(
+          (r) =>
+            `<option value="${r.id}">${r.name} (${r.organic_cert_no || 'Chưa có CC'})</option>`,
+        )
+        .join('');
+  }
 }
 
 // 3. Hàm lưu Nhật ký (Hợp nhất Logic xử lý & UI)
-window.saveFarmingLog = async function() {
-    // Thu thập dữ liệu từ giao diện
-    const plotId = document.getElementById('log-plot-id').value;
-    const activity = document.getElementById('log-activity').value;
-    const itemId = document.getElementById('log-item-id').value;
-    const qty = document.getElementById('log-qty').value;
-    const desc = document.getElementById('log-desc').value;
-    const imageUrl = document.getElementById('log-evidence-url')?.value || '';
+window.saveFarmingLog = async function () {
+  // Thu thập dữ liệu từ giao diện
+  const plotId = document.getElementById('log-plot-id').value;
+  const activity = document.getElementById('log-activity').value;
+  const itemId = document.getElementById('log-item-id').value;
+  const qty = document.getElementById('log-qty').value;
+  const desc = document.getElementById('log-desc').value;
+  const imageUrl = document.getElementById('log-evidence-url')?.value || '';
 
-    if (!plotId) {
-        alert("🧙‍♂️ Vui lòng chọn lô đất để ghi chép!");
-        return;
-    }
+  if (!plotId) {
+    alert('🧙‍♂️ Vui lòng chọn lô đất để ghi chép!');
+    return;
+  }
 
-    // Gửi dữ liệu lên Supabase
-    const { error } = await _supabase.from('farming_logs').insert([{
-        plot_id: plotId,
-        activity_type: activity,
-        input_item_id: itemId || null,
-        input_quantity: qty ? parseFloat(qty) : 0,
-        description: desc,
-        evidence_url: imageUrl,
-        worker_name: "Farmer Pinelab" // Có thể thay bằng biến user nếu có hệ thống login
-    }]);
+  // Gửi dữ liệu lên Supabase
+  const { error } = await _supabase.from('farming_logs').insert([
+    {
+      plot_id: plotId,
+      activity_type: activity,
+      input_item_id: itemId || null,
+      input_quantity: qty ? parseFloat(qty) : 0,
+      description: desc,
+      evidence_url: imageUrl,
+      worker_name: 'Farmer Pinelab', // Có thể thay bằng biến user nếu có hệ thống login
+    },
+  ]);
 
-    if (error) {
-        alert("⚠️ Cảnh báo: " + error.message);
-    } else {
-        alert("🌿 Tuyệt vời! Nhật ký đã lưu, kho vật tư đã tự động trừ.");
-        
-        // Reset form sau khi lưu thành công
-        if(document.getElementById('log-qty')) document.getElementById('log-qty').value = '';
-        if(document.getElementById('log-desc')) document.getElementById('log-desc').value = '';
-        if(document.getElementById('log-evidence-url')) document.getElementById('log-evidence-url').value = '';
-        
-        // Tải lại danh sách hiển thị
-        loadPlotsAndLogs();
-    }
-}
+  if (error) {
+    alert('⚠️ Cảnh báo: ' + error.message);
+  } else {
+    alert('🌿 Tuyệt vời! Nhật ký đã lưu, kho vật tư đã tự động trừ.');
+
+    // Reset form sau khi lưu thành công
+    if (document.getElementById('log-qty'))
+      document.getElementById('log-qty').value = '';
+    if (document.getElementById('log-desc'))
+      document.getElementById('log-desc').value = '';
+    if (document.getElementById('log-evidence-url'))
+      document.getElementById('log-evidence-url').value = '';
+
+    // Tải lại danh sách hiển thị
+    loadPlotsAndLogs();
+  }
+};
 
 // 4. Xuất báo cáo CSV cho đoàn đánh giá
-window.exportOrganicReport = async function() {
-    const { data, error } = await _supabase
-        .from('v_organic_traceability_report')
-        .select('*');
+window.exportOrganicReport = async function () {
+  const { data, error } = await _supabase
+    .from('v_organic_traceability_report')
+    .select('*');
 
-    if (error || !data || data.length === 0) {
-        alert("Lỗi hoặc không có dữ liệu để xuất!");
-        return;
-    }
+  if (error || !data || data.length === 0) {
+    alert('Lỗi hoặc không có dữ liệu để xuất!');
+    return;
+  }
 
-    const headers = Object.keys(data[0]).join(",");
-    const rows = data.map(row => 
-        Object.values(row).map(val => `"${val}"`).join(",")
-    ).join("\n");
+  const headers = Object.keys(data[0]).join(',');
+  const rows = data
+    .map((row) =>
+      Object.values(row)
+        .map((val) => `"${val}"`)
+        .join(','),
+    )
+    .join('\n');
 
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers + "\n" + rows;
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Bao_Cao_Organic_${new Date().toLocaleDateString()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  const csvContent =
+    'data:text/csv;charset=utf-8,\uFEFF' + headers + '\n' + rows;
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute(
+    'download',
+    `Bao_Cao_Organic_${new Date().toLocaleDateString()}.csv`,
+  );
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 };
 
 //Hàm xử lý Upload "Ma thuật" (JS)
 // 1. Hàm xem trước và tự động Upload khi chọn ảnh
 async function previewImage(input) {
-    const file = input.files[0];
-    if (!file) return;
+  const file = input.files[0];
+  if (!file) return;
 
-    const status = document.getElementById('upload-status');
-    const hiddenUrlInput = document.getElementById('log-evidence-url');
-    
-    status.innerHTML = `<span style="color: #f1c40f;">⏳ Đang tải ảnh lên...</span>`;
+  const status = document.getElementById('upload-status');
+  const hiddenUrlInput = document.getElementById('log-evidence-url');
 
-    // Tạo tên file độc nhất để tránh trùng lặp
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `evidences/${fileName}`;
+  status.innerHTML = `<span style="color: #f1c40f;">⏳ Đang tải ảnh lên...</span>`;
 
-    // 1. Upload file vào Bucket 'farming-evidences'
-    const { data, error } = await _supabase.storage
-        .from('farming-evidences')
-        .upload(filePath, file);
+  // Tạo tên file độc nhất để tránh trùng lặp
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Date.now()}.${fileExt}`;
+  const filePath = `evidences/${fileName}`;
 
-    if (error) {
-        status.innerHTML = `<span style="color: #e74c3c;">❌ Lỗi: ${error.message}</span>`;
+  // 1. Upload file vào Bucket 'farming-evidences'
+  const { data, error } = await _supabase.storage
+    .from('farming-evidences')
+    .upload(filePath, file);
+
+  if (error) {
+    status.innerHTML = `<span style="color: #e74c3c;">❌ Lỗi: ${error.message}</span>`;
+    return;
+  }
+
+  // 2. Lấy Public URL của file vừa upload
+  const {
+    data: { publicUrl },
+  } = _supabase.storage.from('farming-evidences').getPublicUrl(filePath);
+
+  // 3. Lưu URL vào input ẩn và cập nhật UI
+  hiddenUrlInput.value = publicUrl;
+  status.innerHTML = `<span style="color: #2ecc71;">✅ Đã lưu ảnh bằng chứng!</span>`;
+}
+// con dấu QC PASS
+async function viewBatchDetail() {
+    const batchNo = document.getElementById('search-batch-no').value;
+    const { data, error } = await _supabase.rpc('get_batch_report', { p_batch_number: batchNo });
+
+    if (error || !data.length) {
+        alert('Không tìm thấy số lô này!');
         return;
     }
 
-    // 2. Lấy Public URL của file vừa upload
-    const { data: { publicUrl } } = _supabase.storage
-        .from('farming-evidences')
-        .getPublicUrl(filePath);
+    const b = data[0];
+    const display = document.getElementById('batch-report-display');
+    const actions = document.getElementById('batch-actions');
 
-    // 3. Lưu URL vào input ẩn và cập nhật UI
-    hiddenUrlInput.value = publicUrl;
-    status.innerHTML = `<span style="color: #2ecc71;">✅ Đã lưu ảnh bằng chứng!</span>`;
+    display.style.display = 'block';
+    actions.style.display = 'flex';
+
+    display.innerHTML = `
+        <div id="pdf-content" style="border: 2px solid #333; padding: 30px; color: #000; background: #fff; min-height: 500px; position: relative; -webkit-print-color-adjust: exact;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #333; margin-bottom: 20px; padding-bottom: 10px;">
+                <div id="qrcode" style="padding: 5px; border: 1px solid #eee;"></div> 
+                <div style="text-align: center; flex-grow: 1;">
+                    <h1 style="margin: 0; font-size: 24px;">HỒ SƠ LÔ SẢN XUẤT</h1>
+                    <p style="margin: 5px 0; color: #666;">Hệ thống Quản lý Pinelab ERP & Organic</p>
+                </div>
+                <div style="width: 80px;"></div>
+            </div>
+
+            <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse; font-size: 16px;">
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;"><b>Số lô:</b> ${b.batch_no}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;"><b>Ngày SX:</b> ${new Date(b.created_at).toLocaleDateString()}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;"><b>Tên sản phẩm:</b> <span style="font-size: 18px; color: #2d6a4f;">${b.product_name}</span></td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;"><b>Số lượng:</b> ${b.quantity} ${b.unit || 'PCS'}</td>
+                </tr>
+                <tr>
+                    <td colspan="2" style="padding: 8px; border: 1px solid #ddd;"><b>Khách hàng:</b> ${b.customer || 'Kho dự trữ'}</td>
+                </tr>
+            </table>
+
+            <h3 style="background: #f0f0f0; padding: 8px; border-left: 5px solid #2d6a4f; margin-top: 20px;">I. THÀNH PHẦN NGUYÊN LIỆU (BOM SNAPSHOT)</h3>
+            <table style="width: 100%; border: 1px solid #ccc; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f9f9f9;">
+                        <th style="border: 1px solid #ccc; padding: 10px;">Tên nguyên liệu</th>
+                        <th style="border: 1px solid #ccc; padding: 10px; text-align: right;">Định lượng thực tế</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${b.bom_data?.map(item => `
+                        <tr>
+                            <td style="border: 1px solid #ccc; padding: 10px;">${item.name}</td>
+                            <td style="border: 1px solid #ccc; padding: 10px; text-align: right;">${item.qty} ${item.unit}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="2">Không có dữ liệu công thức</td></tr>'}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 50px; display: flex; justify-content: space-between; align-items: flex-end;">
+                <div style="text-align: center; width: 250px;">
+                    <p>Người lập hồ sơ</p>
+                    <br><br><br>
+                    <p><b>Farmer Pinelab</b></p>
+                </div>
+                
+                <div style="width: 150px; height: 120px; display: flex; align-items: center; justify-content: center;">
+                    ${b.qc_status === 'PASSED' ? `
+                        <div class="qc-stamp" style="border: 4px double #d90429; color: #d90429; padding: 10px; transform: rotate(-15deg); font-weight: bold; border-radius: 50%; width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; text-align: center; background: rgba(217, 4, 41, 0.05); font-size: 18px;">
+                            QC<br>PASSED
+                        </div>
+                    ` : '<p style="color: #aaa; font-style: italic;">Chờ QC kiểm duyệt...</p>'}
+                </div>
+            </div>
+        </div>
+    `;
+
+    // TẠO MÃ QR (Chạy sau khi gán HTML)
+    new QRCode(document.getElementById("qrcode"), {
+        text: "https://pinelab.vn/trace/" + b.batch_no,
+        width: 80,
+        height: 80
+    });
 }
+// XUẤT PDF mes
+window.exportBatchPDF = function () {
+  const printContents = document.getElementById('pdf-content').innerHTML;
+
+  // Tạo một cửa sổ in mới hoàn toàn để không bị dính CSS của giao diện chính
+  const printWindow = window.open('', '_blank', 'width=800,height=1000');
+
+  printWindow.document.write(`
+        <html>
+            <head>
+                <title>Hồ sơ lô - ${document.getElementById('search-batch-no').value}</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        padding: 20px; 
+                        background: white !important; /* Ép nền trắng */
+                        color: black !important;
+                    }
+                    /* Ép trình duyệt in màu và khung */
+                    * { 
+                        -webkit-print-color-adjust: exact !important; 
+                        print-color-adjust: exact !important; 
+                    }
+                    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                    th, td { border: 1px solid #333; padding: 10px; text-align: left; }
+                    .qc-stamp {
+                        border: 4px double #d90429;
+                        color: #d90429;
+                        padding: 10px;
+                        transform: rotate(-15deg);
+                        font-weight: bold;
+                        border-radius: 50%;
+                        width: 80px;
+                        height: 80px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        text-align: center;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body onload="window.print();window.close();">
+                <div style="border: 2px solid #000; padding: 20px;">
+                    ${printContents}
+                </div>
+            </body>
+        </html>
+    `);
+
+  printWindow.document.close();
+};
+// DẨU ĐỎ QC PASS
+window.approveQC = async function () {
+  const batchNo = document.getElementById('search-batch-no').value;
+  const staffName = 'Trưởng phòng QC - Pinelab'; // Có thể lấy từ hệ thống login
+
+  const { error } = await _supabase
+    .from('batch_records')
+    .update({
+      qc_status: 'PASSED',
+      qc_staff: staffName,
+    })
+    .eq('batch_number', batchNo);
+
+  if (error) {
+    alert('Lỗi đóng dấu: ' + error.message);
+  } else {
+    alert('印 Đã đóng dấu QC PASS thành công!');
+    viewBatchDetail(); // Tải lại giao diện để hiện dấu đỏ
+  }
+};

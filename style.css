@@ -277,6 +277,35 @@ input, select {
     position: absolute; top: 15px; right: 20px;
     font-size: 24px; cursor: pointer; color: var(--magic-gold);
 }
+@media print {
+    /* Ép trình duyệt hiển thị màu nền và hình ảnh */
+    body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Ẩn các nút bấm và thanh cuộn khi in */
+    .btn-magic, .btn-finish, .close-btn, .sidebar, .top-bar {
+        display: none !important;
+    }
+
+    /* Căn chỉnh lại hồ sơ lô cho vừa trang giấy A4 */
+    #pdf-content {
+        width: 100% !important;
+        border: 2px solid #000 !important; /* Đổi sang màu đen đặc để in rõ hơn */
+        margin: 0 !important;
+        padding: 20px !important;
+    }
+    
+    .modal-overlay {
+        position: relative !important;
+        background: none !important;
+    }
+}
+#qrcode img {
+    margin: 0 auto;
+    border: 5px solid #fff;
+}
 /* Đảm bảo đom đóm không che khuất nút bấm */
 .firefly {
     pointer-events: none;

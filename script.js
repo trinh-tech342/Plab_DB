@@ -195,10 +195,127 @@ function setupNavbar() {
 }
 
 // Hàm chuyển đổi Section (Dành cho bản GitHub sau này)
-async function showSection(sectionName) {
-  const contentArea = document.getElementById('content-area');
-  // Lưu ý: JSFiddle không fetch được file cục bộ, hàm này dùng để bạn chuẩn bị cho bản GitHub
-  console.log('Đang chuyển hướng tới section:', sectionName);
+window.showSection = async function(type) {
+    const content = document.getElementById('content-area');
+    
+    if (type === 'dashboard') {
+        content.innerHTML = `
+            <div class="dashboard-header">
+                <h2>📊 Trạm Chỉ Huy Pinelab</h2>
+                <p id="last-updated" style="font-size: 0.8rem; color: #666;"></p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card bg-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3 id="dash-low-stock">0</h3>
+                    <p>Vật tư sắp hết</p>
+                </div>
+                <div class="stat-card bg-warning">
+                    <i class="fas fa-stamp"></i>
+                    <h3 id="dash-pending-qc">0</h3>
+                    <p>Lô chờ duyệt QC</p>
+                </div>
+                <div class="stat-card bg-success">
+                    <i class="fas fa-leaf"></i>
+                    <h3 id="dash-organic-rate">0%</h3>
+                    <p>Tỷ lệ Organic</p>
+                </div>
+                <div class="stat-card bg-info">
+                    <i class="fas fa-shopping-cart"></i>
+                    <h3 id="dash-pending-orders">0</h3>
+                    <p>Đơn hàng mới</p>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="card glass">
+                    <h3><i class="fas fa-history"></i> Hoạt động Nông trại gần nhất</h3>
+                    <div id="dash-recent-farming" style="margin-top:10px;">Đang tải...</div>
+                </div>
+                <div class="card glass">
+                    <h3><i class="fas fa-truck-loading"></i> Danh sách cần nhập hàng</h3>
+                    <div id="dash-restock-list" style="margin-top:10px;">Đang tải...</div>
+                </div>
+            </div>
+        `;
+        // Kích hoạt lấy dữ liệu thực
+        renderDashboardData();
+
+    } else if (type === 'oms') {
+        content.innerHTML = `<h2>📦 Quản lý đơn hàng (OMS)</h2><div id="oms-list">...</div>`;
+        // Gọi hàm load đơn hàng của bạn ở đây
+    }
+};
+
+async function renderDashboardData() {
+    // 1. Lấy dữ liệu từ View Tồn kho
+    const { data: invData } = await _supabase.from('v_inventory_report').select('*');
+    const lowStockItems = invData?.filter(i => i.stock_status !== 'Sẵn có') || [];
+    
+    // 2. Lấy số lô chờ duyệt QC
+    const { count: pendingQC } = await _supabase.from('batch_records').select('*', { count: 'exact', head: true }).eq('qc_status', 'pending');
+
+    // 3. Lấy số đơn hàng mới
+    const { count: pendingOrders } = await _supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+
+    // 4. Tính tỷ lệ Organic
+    const { data: items } = await _supabase.from('items').select('is_organic_approved');
+    const organicRate = items?.length ? Math.round((items.filter(i => i.is_organic_approved).length / items.length) * 100) : 0;
+
+    // 5. Lấy nhật ký canh tác mới nhất
+    const { data: farmLog } = await _supabase.from('farming_logs').select('activity_type, worker_name, created_at').order('created_at', { ascending: false }).limit(1);
+
+    // CẬP NHẬT GIAO DIỆN
+    document.getElementById('dash-low-stock').innerText = lowStockItems.length;
+    document.getElementById('dash-pending-qc').innerText = pendingQC || 0;
+    document.getElementById('dash-organic-rate').innerText = organicRate + '%';
+    document.getElementById('dash-pending-orders').innerText = pendingOrders || 0;
+    document.getElementById('last-updated').innerText = "Cập nhật lúc: " + new Date().toLocaleTimeString();
+
+    // Render danh sách cần nhập hàng nhanh
+    const restockDiv = document.getElementById('dash-restock-list');
+    if (lowStockItems.length > 0) {
+        restockDiv.innerHTML = lowStockItems.map(i => `
+            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid #eee;">
+                <span>${i.product_name}</span>
+                <b style="color:#d90429;">${i.available_stock} ${i.unit}</b>
+            </div>
+        `).join('');
+    } else {
+        restockDiv.innerHTML = "<p style='color:green'>✅ Kho hàng đang rất an toàn!</p>";
+    }
+
+    // Render hoạt động nông trại
+    const farmDiv = document.getElementById('dash-recent-farming');
+    if (farmLog?.length) {
+        farmDiv.innerHTML = `
+            <div style="padding:10px; background:rgba(45,106,79,0.05); border-radius:10px;">
+                <p><b>Hoạt động:</b> ${farmLog[0].activity_type}</p>
+                <p><b>Nhân viên:</b> ${farmLog[0].worker_name}</p>
+                <p><small>${new Date(farmLog[0].created_at).toLocaleString()}</small></p>
+            </div>
+        `;
+    } else {
+        farmDiv.innerHTML = "<p>Chưa có nhật ký hôm nay.</p>";
+    }
+}
+
+// Hàm phụ trợ để đổ số liệu vào Dashboard
+async function updateDashboardStats() {
+    // 1. Đếm số mặt hàng trong kho
+    const { count: itemCount } = await _supabase
+        .from('items')
+        .select('*', { count: 'exact', head: true });
+    
+    // 2. Đếm số đơn hàng đang 'pending'
+    const { count: orderCount } = await _supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+    document.getElementById('stat-inventory-count').innerText = itemCount || 0;
+    document.getElementById('stat-order-count').innerText = orderCount || 0;
 }
 // ==========================================
 // 5. MODAL
@@ -211,6 +328,7 @@ function openModal(type) {
   // Cập nhật phần WMS trong hàm openModal
   // Thêm vào trong script.js
   // Thay thế đoạn 'farming-modal' cũ của bạn bằng đoạn này
+  
   if (type === 'farming-modal') {
     body.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">

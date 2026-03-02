@@ -15,7 +15,7 @@
                 <span>PINELAB</span>
             </div>
                 <ul class="nav-menu">
-                    <li class="active" onclick="showSection('oms')">📦 TỔNG QUAN</li>
+                    <li class="active" onclick="showSection('dashboard')"><i class="fas fa-chart-line"></i> TỔNG QUAN</li>
                     <li onclick="showSection('oms')">📦 Đặt hàng (OMS)</li>
                     <li onclick="openModal('wms-modal')">🏠 Kho Vận (WMS)</li>
                     <li onclick="openModal('mes-modal')">🧪 Sản xuất (MES)</li>
@@ -30,11 +30,9 @@
             <header class="top-bar">
                 <h1>Hệ Thống Điều Hành PINELAB</h1>
             </header>
-        <div class="main-content" id="main-display">
-            <div id="content-area">
-                <h2>Chào mừng bạn đến với Hệ thống Phù Thủy!</h2>
-                <p>Vui lòng chọn chức năng bên trái.</p>
-            </div>
+        <div id="content-area" class="dynamic-content card glass">
+            <h2>Chào mừng bạn đến với Hệ thống Phù Thủy!</h2>
+            <p>Vui lòng chọn chức năng bên trái để bắt đầu điều hành.</p>
         </div>
             <div class="grid-layout">
                 <section class="card glass">

@@ -536,7 +536,7 @@ async function loadPlotsAndLogs() {
 
   // Lấy 10 nhật ký từ View tổng hợp (Hiển thị đẹp hơn)
   const { data: logs, error } = await _supabase
-    .from('v_organic_compliance_report')
+    .from('v_organic_traceability_report')
     .select('*')
     .limit(10);
 

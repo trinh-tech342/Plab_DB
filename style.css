@@ -306,6 +306,31 @@ input, select {
     margin: 0 auto;
     border: 5px solid #fff;
 }
+/*dashboard css code*/
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    transition: transform 0.3s;
+}
+
+.stat-card:hover { transform: translateY(-5px); }
+.stat-card i { font-size: 2rem; margin-bottom: 10px; }
+.stat-card h3 { font-size: 1.8rem; margin: 5px 0; }
+.stat-card p { font-size: 0.9rem; opacity: 0.8; }
+
+/* Màu sắc theo trạng thái */
+.bg-danger { background: rgba(217, 4, 41, 0.1); color: #d90429; border: 1px solid #d90429; }
+.bg-warning { background: rgba(247, 127, 0, 0.1); color: #f77f00; border: 1px solid #f77f00; }
+.bg-success { background: rgba(45, 106, 79, 0.1); color: #2d6a4f; border: 1px solid #2d6a4f; }
+.bg-info { background: rgba(0, 119, 182, 0.1); color: #0077b2; border: 1px solid #0077b2; }
 /* Đảm bảo đom đóm không che khuất nút bấm */
 .firefly {
     pointer-events: none;

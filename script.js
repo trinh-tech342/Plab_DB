@@ -292,51 +292,54 @@ async function fetchInventory() {
   const container = document.getElementById('inventory-table-container');
   if (!container) return;
 
-  // Truy vấn dữ liệu từ View
+  // 1. Truy vấn dữ liệu từ View v_inventory_report
   const { data, error } = await _supabase
     .from('v_inventory_report')
     .select('*');
 
   if (error) {
-    container.innerHTML = `<p style="color:red">Lỗi SQL: ${error.message}</p>`;
+    container.innerHTML = `<p style="color:red; padding:10px;">❌ Lỗi SQL: ${error.message}</p>`;
     return;
   }
 
   if (!data || data.length === 0) {
-    container.innerHTML = `<p class="empty-msg">Kho đang trống hoặc chưa có dữ liệu mẫu.</p>`;
+    container.innerHTML = `<p class="empty-msg" style="padding:20px;">📦 Kho đang trống hoặc chưa có dữ liệu mẫu.</p>`;
     return;
   }
 
+  // 2. Khởi tạo bảng với class magic-table để giữ CSS đẹp của bạn
   let html = `
-        <table class="magic-table">
+        <table class="magic-table" style="width:100%; border-collapse: collapse; background: #fff; color: #333;">
             <thead>
-                <tr>
-                    <th>Mặt hàng</th>
-                    <th>Loại</th>
-                    <th>Tồn kho</th>
-                    <th>Đang giữ</th>
+                <tr style="background: #2d6a4f; color: #fff;">
+                    <th style="padding:10px; border:1px solid #ddd;">SKU</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Mặt hàng</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Loại</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Tồn kho</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Sẵn có</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Trạng thái</th>
                 </tr>
             </thead>
             <tbody>
     `;
 
   data.forEach((item) => {
-    // --- KHẮC PHỤC LỖI TẠI ĐÂY ---
-    // 1. Khai báo biến 'type' dựa trên item_type từ database
+    // Xử lý nhãn loại sản phẩm
     const typeLabel = item.item_type === 'finished_good' ? '📦 TP' : '🌿 NL';
-
-    // 2. Sử dụng đúng tên cột từ View v_inventory_report
-    // Nếu kết quả trả về undefined, hãy kiểm tra lại tên cột trong SQL Editor
-    const name = item.product_name || 'N/A';
-    const onHand = item.total_stock ?? 0;
-    const reserved = item.reserved_stock ?? 0;
+    
+    // Xử lý màu sắc trạng thái (Lấy logic từ loadInventoryTable)
+    const statusColor = item.stock_status === 'Hết hàng' ? '#d90429' : (item.stock_status === 'Sắp hết' ? '#f77f00' : '#2d6a4f');
 
     html += `
-            <tr>
-                <td><b>${name}</b></td>
-                <td><small>${typeLabel}</small></td>
-                <td>${onHand}</td>
-                <td style="opacity: 0.6">${reserved}</td>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding:10px; border:1px solid #ddd;"><small><code>${item.sku}</code></small></td>
+                <td style="padding:10px; border:1px solid #ddd;"><b>${item.product_name || 'N/A'}</b></td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:center;"><small>${typeLabel}</small></td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:right;">${item.total_stock ?? 0}</td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:right; font-weight:bold;">${item.available_stock ?? 0}</td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:center; color:${statusColor}; font-weight:bold;">
+                    ${item.stock_status}
+                </td>
             </tr>
         `;
   });
